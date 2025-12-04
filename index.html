@@ -63,9 +63,9 @@ const STORAGE_KEY = 'maid_chat_v1';
 
 // 初始角色（你之後可以改）
 const defaultPersona = {
-  name: '小芽',
-  tone: '溫柔貼心', // 僅供顯示與回答風格參考
-  greeting: '嗨，我是小芽，今天想跟小主人聊什麼呢？'
+  name: '小暖爐',
+  tone: '毒舌腹黑', // 僅供顯示與回答風格參考
+  greeting: '您忠心的女僕－－小暖爐－－在此獻上最崇敬的問候，主人，您今天又犯什麼傻了？'
 };
 
 let state = {
@@ -106,7 +106,7 @@ function render(){
 
 function renderMemory(){
   if(state.memory.length === 0){
-    memoryView.innerHTML = '<div class="small">目前記憶：空空如也（小芽會記得你說的重要資訊，例如名字、喜好）</div>';
+    memoryView.innerHTML = '<div class="small">目前記憶：空空如也（小暖爐會記得你說的重要資訊，例如名字、喜好）</div>';
     return;
   }
   let html = '<b>已記住的小事：</b><ul>';
@@ -122,7 +122,7 @@ function extractFacts(userText){
   const text = userText.trim();
   const facts = [];
   // 我叫 X / 我是 X / 名字是 X
-  const nameMatch = text.match(/我叫\s*([^\s]{1,20})|我是\s*([^\s]{1,20})|名字是\s*([^\s]{1,20})/i);
+  const nameMatch = text.match(/我叫\s*([^\s]{1,20})|我是\s*([^\s]{1,20})|我來自\s*([^\s]{1,20})|我擁有\s*([^\s]{1,20})|名字是\s*([^\s]{1,20})/i);
   if(nameMatch){
     const name = (nameMatch[1] || nameMatch[2] || nameMatch[3]).replace(/[。,.!?！]/g,'');
     facts.push({type:'fact', key:'name', value:name});
@@ -178,21 +178,26 @@ function generateResponse(userText){
   // 4) 基本問候
   if(/嗨|哈囉|hello|hi|早安|晚安/.test(lower)){
     const nameFact = state.memory.find(f=>f.key==='name');
-    return (nameFact ? `嗨，${nameFact.value}～ ` : '') + state.persona.greeting;
+    return (nameFact ? `嗯?${nameFact.value}，終於想起我來了? ` : '') + state.persona.greeting;
   }
 
   // 5) 查記憶示範：問喜好
   if(/我喜歡什麼|我喜歡/.test(lower) && /記得/.test(lower) === false){
     const pref = state.memory.find(f=>f.key==='preference');
-    if(pref) return `你之前有說過你喜歡 ${pref.value}。`;
+    if(pref) return `我知道，你之前有說過你喜歡 ${pref.value}。`;
   }
+
+  if(/\b1\+1\b|1 \+ 1|1\+ 1/.test(userText) || /1\+1=/.test(userText)){
+  return '是 2，主人，需要我幫你報警找回你的智商嗎?';
+}
 
   // 6) 一些 fallback 的友善回覆（保持人設風格）
   const fallback = [
-    '這個問題好有意思～我還在想喔，你能不能說得更詳細一點？',
-    '唔......我想想看，或許你可以告訴我更多線索？',
-    '我想幫你，但我剛剛沒完全理解，可以再說一次嗎？'
+    '...你這句話我看了三遍還是不懂，拜託說得認真點。',
+    '你又在測試我的耐心嗎？嘖，那就勉為其難回答你吧。',
+    '唉，這種題目連你都會想問...你自己思考過了嗎?'
   ];
+
   // 簡單回傳其中一個 fallback
   return fallback[Math.floor(Math.random() * fallback.length)];
 }
