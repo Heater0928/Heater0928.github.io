@@ -26,8 +26,8 @@
 </head>
 <body>
   <div class="wrap" role="main">
-    <h1>小女僕 Beta —— 可離線長期記憶（localStorage）</h1>
-    <div class="pill small">純前端示範版 · 先學概念，之後可升級連接真正的 AI</div>
+    <h1>女僕小暖爐</h1>
+    <div class="pill small">註:我真的不是男娘</div>
 
     <div id="chat" class="chat" aria-live="polite"></div>
 
@@ -156,7 +156,7 @@ function generateResponse(userText){
   }
 
   // 2) 詢問設定：女僕叫什麼？
-  if(/妳叫什麼|你叫什麼|妳的名字|你的名字/.test(userText)){
+  if(/妳叫什麼|你叫什麼|妳叫什麼名字|你叫什麼名字|妳是誰|你是誰|妳的名字|你的名字/.test(userText)){
     return `我叫 ${state.persona.name}，是你專屬的小女僕：${state.persona.tone}。`;
   }
 
@@ -176,7 +176,7 @@ function generateResponse(userText){
   }
 
   // 4) 基本問候
-  if(/嗨|哈囉|hello|hi|早安|晚安/.test(lower)){
+  if(/嗨|喂|哈囉|你好|妳好|hello|hi|oi|早安|午安|晚安/.test(lower)){
     const nameFact = state.memory.find(f=>f.key==='name');
     return (nameFact ? `嗯?${nameFact.value}，終於想起我來了? ` : '') + state.persona.greeting;
   }
@@ -193,8 +193,8 @@ function generateResponse(userText){
 
   // 6) 一些 fallback 的友善回覆（保持人設風格）
   const fallback = [
-    '...你這句話我看了三遍還是不懂，拜託說得認真點。',
-    '你又在測試我的耐心嗎？嘖，那就勉為其難回答你吧。',
+    '...抱歉，在下不是ChatGPT，我也就比小白強點...別問小白是誰。',
+    '這句話不在指令範圍內，你的問題超綱了。',
     '唉，這種題目連你都會想問...你自己思考過了嗎?'
   ];
 
