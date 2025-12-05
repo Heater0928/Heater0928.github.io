@@ -157,7 +157,7 @@ function generateResponse(userText){
 
   // 2) 詢問設定：女僕叫什麼？
   if(/妳叫什麼|你叫什麼|妳叫什麼名字|你叫什麼名字|妳是誰|你是誰|妳的名字|你的名字/.test(userText)){
-    return `我叫 ${state.persona.name}，是你專屬的小女僕：${state.persona.tone}。`;
+    return `我叫 ${state.persona.name}，主人已經連我是誰都想不起來了嗎？唉，這日子...`;
   }
 
   // 3) 如果使用者告訴名字，我們會回應確認並存記憶
@@ -178,7 +178,7 @@ function generateResponse(userText){
   // 4) 基本問候
   if(/嗨|喂|哈囉|你好|妳好|hello|hi|oi|早安|午安|晚安/.test(lower)){
     const nameFact = state.memory.find(f=>f.key==='name');
-    return (nameFact ? `嗯?${nameFact.value}，終於想起我來了? ` : '') + state.persona.greeting;
+    return `嗯？主人，終於想起我來了? `;
   }
 
   // 5) 查記憶示範：問喜好
@@ -189,39 +189,6 @@ function generateResponse(userText){
 
   if(/\b1\+1\b|1 \+ 1|1\+ 1/.test(userText) || /1\+1=/.test(userText)){
   return '是 2，主人，需要我幫你報警找回你的智商嗎?';
-}
-
-  if (message.includes("？")) {
-    const hiReplies = [
-      "幹嘛？",
-      "？",
-      "...怎麼？有疑惑就說，主人你只打問號我很難判斷你的疑惑..."
-      ];
-     reply = 
-    hiReplies[Math.fioor(Math.random()*
-                         hiReplies.length)];
-}
-
-if (message.includes("？？")) {
-    const hiReplies = [
-      "幹嘛？",
-      "？",
-      "...怎麼？有疑惑就說，主人你只打問號我很難判斷你的疑惑..."
-      ];
-     reply = 
-    hiReplies[Math.fioor(Math.random()*
-                         hiReplies.length)];
-}
-  
-   if (message.includes("？？？")) {
-    const hiReplies = [
-      "幹嘛？",
-      "？",
-      "...怎麼？有疑惑就說，主人你只打問號我很難判斷你的疑惑..."
-      ];
-     reply = 
-    hiReplies[Math.fioor(Math.random()*
-                         hiReplies.length)];
 }
   
   // 6) 一些 fallback 的友善回覆（保持人設風格）
