@@ -191,6 +191,39 @@ function generateResponse(userText){
   return '是 2，主人，需要我幫你報警找回你的智商嗎?';
 }
 
+  if (message.includes("？")) {
+    const hiReplies = [
+      "幹嘛？",
+      "？",
+      "...怎麼？有疑惑就說，主人你只打問號我很難判斷你的疑惑..."
+      ];
+     reply = 
+    hiReplies[Math.fioor(Math.random()*
+                         hiReplies.length)];
+}
+
+if (message.includes("？？")) {
+    const hiReplies = [
+      "幹嘛？",
+      "？",
+      "...怎麼？有疑惑就說，主人你只打問號我很難判斷你的疑惑..."
+      ];
+     reply = 
+    hiReplies[Math.fioor(Math.random()*
+                         hiReplies.length)];
+}
+  
+   if (message.includes("？？？")) {
+    const hiReplies = [
+      "幹嘛？",
+      "？",
+      "...怎麼？有疑惑就說，主人你只打問號我很難判斷你的疑惑..."
+      ];
+     reply = 
+    hiReplies[Math.fioor(Math.random()*
+                         hiReplies.length)];
+}
+  
   // 6) 一些 fallback 的友善回覆（保持人設風格）
   const fallback = [
     '...抱歉，我的開發者沒教我遇到這句話怎麼回。',
