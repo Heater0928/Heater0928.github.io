@@ -1,0 +1,22 @@
+{
+  "patterns": [
+    {
+      "match": ["我叫", "我的名字"],
+      "extract": {"field": "name_user", "position": "after"}
+    },
+    {
+      "match": ["我喜歡", "最愛"],
+      "extract": {"field": "like_thing", "position": "after"}
+    }
+  ],
+  "responses": {
+    "name_user": [
+      "好啦，%value%，人家記住你的名字了。",
+      "知道了啦，主人叫%value%。別一直炫耀～"
+    ],
+    "like_thing": [
+      "原來主人喜歡%value%？人家會記住的……可能啦。",
+      "欸？%value%？主人品味有夠微妙欸。"
+    ]
+  }
+}
