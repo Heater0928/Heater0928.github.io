@@ -201,32 +201,58 @@ function generateResponse(userText){
   return fallback[Math.floor(Math.random() * fallback.length)];
 }
 
+  // ---------- 新增函式：maidReply ----------
+async function maidReply(userMessage) {
+  // 讀 personality.json
+  let data;
+  try {
+    const res = await fetch("personality.json");
+    data = await res.json();
+  } catch (err) {
+    // 如果載入失敗，回 fallback 的簡單句子（避免整個程式崩潰）
+    return "我現在狀態怪怪的，稍後再說。";
+  }
+
+  const text = (userMessage || "").toLowerCase();
+
+  // 簡單分類（你之後可再加更多條件）
+  let category = "fallback";
+  if (text.includes("你好") || text.includes("嗨")) category = "greeting";
+  else if (text.includes("笨") || text.includes("傻") || text.includes("白癡")) category = "insult";
+  else if (text.includes("喜歡我") || text.includes("愛我") || text.includes("喜歡你")) category = "love";
+
+  const pool = Array.isArray(data[category]) ? data[category] : data["fallback"];
+  // 隨機抽一個回覆
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return pick;
+}
+// ---------- 新增函式結束 ----------
+
 // 送出流程
-function userSend(text){
+async function userSend(text){
   if(!text || text.trim()==='') return;
-  state.history.push({role:'user', text});
+state.history.push({role:'user', text});
+saveState();
+render();
+
+setTimeout(async ()=>{
+  const facts = extractFacts(text);
+  if(facts.length){
+    facts.forEach(f=>{
+      const idx = state.memory.findIndex(m => m.key === f.key);
+      if(idx >= 0) state.memory[idx].value = f.value;
+      else state.memory.push(f);
+    });
+    saveState();
+  }
+
+  // 這裡用我們新增的 async maidReply
+  const resp = await maidReply(text);
+  state.history.push({role:'maid', text: resp});
   saveState();
   render();
+}, 350);
 
-  // 模擬 Processing（立即回覆）
-  setTimeout(()=>{
-    // 先嘗試以記憶抽取為優先（如果使用者輸入是「我叫 X」會被抽成記憶）
-    const facts = extractFacts(text);
-    if(facts.length){
-      facts.forEach(f=>{
-        const idx = state.memory.findIndex(m => m.key === f.key);
-        if(idx >= 0) state.memory[idx].value = f.value;
-        else state.memory.push(f);
-      });
-      saveState();
-    }
-
-    const resp = generateResponse(text);
-    state.history.push({role:'maid', text: resp});
-    saveState();
-    render();
-  }, 350);
-}
 
 // UI bindings
 document.getElementById('sendBtn').addEventListener('click', ()=>{
