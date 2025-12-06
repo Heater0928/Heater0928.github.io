@@ -65,7 +65,8 @@ const STORAGE_KEY = 'maid_chat_v1';
 const defaultPersona = {
   name: '小暖爐',
   tone: '毒舌腹黑', // 僅供顯示與回答風格參考
-  greeting: '人家是你的小女僕小暖爐——主人，你今天又犯什麼傻了？'
+  greeting: '人家是你的小女僕小暖爐——主人，你今天又犯什麼傻了？',
+  affection: 0  // 好感分，範圍建議 -10 ~ +10（越正表示越寵）
 };
 
 let state = {
@@ -211,6 +212,7 @@ saveState();
 render();
 
 setTimeout(async ()=>{
+  // 抽取與存記憶（保留你之前的行為）
   const facts = extractFacts(text);
   if(facts.length){
     facts.forEach(f=>{
@@ -219,11 +221,31 @@ setTimeout(async ()=>{
       else state.memory.push(f);
     });
     saveState();
+    // 若有命中記憶對應的 responses (如果你已建立 memory-rules.json) 可以處理那邊的回覆
+    // （此處保留未來擴充空間）
   }
 
-  // 這裡用我們新增的 async maidReply
+  // 根據輸入文字，嘗試做正負情緒調整（也會在 maidReply 內做一次；這裡做一次較即時）
+  const low = text.toLowerCase();
+  const pos = ['謝謝','感謝','你真棒','好厲害','愛你','喜歡你','厲害'];
+  const neg = ['笨','蠢','白癡','討厭','爛','幹','去死'];
+  for(const p of pos) if(low.includes(p)) { adjustAffection(+2); break; }
+  for(const n of neg) if(low.includes(n)) { adjustAffection(-2); break; }
+
+  // 呼叫新 maidReply（她會自己選 tone）
   const resp = await maidReply(text);
-  state.history.push({role:'maid', text: resp});
+
+  // 如果使用者在問名字或查記憶，我們想優先用 generateResponse 的記憶機制回覆
+  // （例如問「你叫什麼」或「你記得我嗎」），優先檢查並回覆
+  const memoryQ = /你記得我嗎|還記得我嗎|記得我嗎|你叫什麼|你的名字|妳叫什麼/;
+  if(memoryQ.test(text)){
+    // 讓 generateResponse 優先處理記憶型問題
+    const gresp = generateResponse(text);
+    state.history.push({role:'maid', text: gresp});
+  } else {
+    state.history.push({role:'maid', text: resp});
+  }
+
   saveState();
   render();
 }, 350);
@@ -305,26 +327,117 @@ const personalityData = {
   }
 };
 
-async function maidReply(userMessage) {
-  // 這個版本不會 fetch 檔案，全部用上面內嵌的 personalityData
-  const text = (userMessage || "").toLowerCase();
+// ---------- 情緒 / 語氣系統 ----------
+function adjustAffection(delta){
+  // delta 可以是正數（好）或負數（壞）
+  if(!state.persona) state.persona = defaultPersona;
+  state.persona.affection = Math.max(-10, Math.min(10, (state.persona.affection || 0) + delta));
+  saveState();
+  // debug：可在 console 看到最新好感
+  console.log('affection ->', state.persona.affection);
+}
 
-  // 簡單排序判斷：你可以之後擴充更多關鍵字或用更好的語意判斷
-  let category = "fallback";
-  if (text.includes("你好") || text.includes("嗨") || text.includes("哈囉")) {
-    category = "greeting";
-  } else if (text.includes("笨") || text.includes("傻") || text.includes("白癡") || text.includes("蠢")) {
-    category = "insult";
-  } else if (text.includes("喜歡我") || text.includes("愛我") || text.includes("喜歡你")) {
-    category = "love";
-  } else if (text.includes("笑話") || text.includes("梗") || text.includes("好笑")) {
-    category = "joke";
+// 根據好感值與隨機性選擇語氣 A/B/C/D
+function chooseTone(){
+  // affection 範圍 -10..+10，越正→越溺愛/賣萌（C/D），越負→越毒舌（B）
+  const a = state.persona && typeof state.persona.affection === 'number' ? state.persona.affection : 0;
+  // 計算權重：基礎為 [A,B,C,D]，會依好感偏移
+  // 我們把四種 tone 的基礎機率設為均等，然後根據 affection 調整
+  // 方式：把 affection 映射到一個偏移值 -1..1
+  const bias = Math.max(-1, Math.min(1, a / 10)); // -1..1
+  // 當 bias < 0 時，偏向 B（毒舌），當 bias > 0 時，偏向 C、D（溫暖/害羞）
+  // 產生權重
+  let wA = 1.0;
+  let wB = 1.0 + (-bias > 0 ? -bias * 1.5 : 0); // 好感低→B 增加
+  let wC = 1.0 + (bias > 0 ? bias * 1.2 : 0);   // 好感高→C 增加
+  let wD = 1.0 + (bias > 0 ? bias * 0.8 : 0);   // 好感高→D 略增
+
+  // 輸出機率
+  const list = [
+    {k:'A', w: wA},
+    {k:'B', w: wB},
+    {k:'C', w: wC},
+    {k:'D', w: wD}
+  ];
+  const total = list.reduce((s,i)=>s+i.w,0);
+  let r = Math.random() * total;
+  for(const it of list){
+    r -= it.w;
+    if(r <= 0) return it.k;
+  }
+  return 'A';
+}
+
+// 更新版 maidReply：會依據 chooseTone() 來抓對應的 pool 並回覆
+async function maidReply(userMessage) {
+  const text = (userMessage || '').toLowerCase();
+
+  // 先根據語句判斷「情緒影響」：例如稱讚、罵人、撒嬌，會影響 affection
+  // 這段可以擴充關鍵字
+  const positiveTriggers = ['謝謝','感謝','你真棒','好厲害','愛你','喜歡你','厲害'];
+  const negativeTriggers = ['笨','蠢','白癡','討厭','爛','幹','去死'];
+
+  for(const p of positiveTriggers){
+    if(text.includes(p)) { adjustAffection(+2); break; }
+  }
+  for(const n of negativeTriggers){
+    if(text.includes(n)) { adjustAffection(-2); break; }
   }
 
-  const pool = Array.isArray(personalityData[category]) ? personalityData[category] : personalityData["fallback"];
-  const pick = pool[Math.floor(Math.random() * pool.length)];
-  return pick;
+  // 決定 category（語意分類）跟 tone（A/B/C/D）
+  let category = 'fallback';
+  if (text.includes('你好') || text.includes('嗨') || text.includes('哈囉')) category = 'greeting';
+  else if (text.includes('喜歡我') || text.includes('愛我') || text.includes('喜歡你')) category = 'love';
+  else if (text.includes('笑話') || text.includes('梗') || text.includes('好笑')) category = 'joke';
+  else if (text.includes('1+1') || text.includes('1 + 1') || text.includes('1+ 1') || /幾/.test(text) ) {
+    // 保留數學等簡單判斷可落回 generateResponse，如果需要可以擴充
+    category = 'fallback';
+  } else if (text.includes('你叫') || text.includes('名字')) {
+    category = 'greeting';
+  } else {
+    // keep fallback
+  }
+
+  // 決定 tone
+  const tone = chooseTone(); // 'A'|'B'|'C'|'D'
+
+  // 從 personalityData 裡拿對應的陣列（如果你已用我們的四分法）
+  let pool = [];
+
+  // 支援兩種 personalityData 結構：
+  // - 若 category 對應到物件 {A:[],B:[],C:[],D:[]} 使用 tone 池
+  // - 若 category 對應到陣列（舊版）則直接用那個陣列
+  const catData = personalityData[category];
+  if(Array.isArray(catData)){
+    pool = catData;
+  } else if(catData && typeof catData === 'object' && catData[tone]){
+    pool = catData[tone];
+  } else {
+    // fallback 保底
+    const fallback = personalityData['fallback'];
+    if(Array.isArray(fallback)) pool = fallback;
+    else if(fallback && fallback[tone]) pool = fallback[tone];
+  }
+
+  // 若 pool 為空，嘗試 fallback 的 tone 池
+  if(!pool || pool.length === 0){
+    const fb = personalityData['fallback'];
+    pool = Array.isArray(fb) ? fb : (fb && fb[tone] ? fb[tone] : ['人家現在沒話要說。']);
+  }
+
+  // 隨機取一則回覆
+  const reply = pool[Math.floor(Math.random() * pool.length)];
+
+  // 最後做小量的替換（例如把 %name% 換成使用者記憶內的名字）
+  let finalReply = reply;
+  const nameFact = state.memory.find(m=>m.key==='name');
+  if(nameFact){
+    finalReply = finalReply.replace(/%name%/g, nameFact.value);
+  }
+
+  return finalReply;
 }
+// ---------- 情緒 / 語氣系統 結束 ----------
 // ---------- 新版結束 ----------
 
 // UI bindings
