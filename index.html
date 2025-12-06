@@ -65,7 +65,7 @@ const STORAGE_KEY = 'maid_chat_v1';
 const defaultPersona = {
   name: '小暖爐',
   tone: '毒舌腹黑', // 僅供顯示與回答風格參考
-  greeting: '您忠心的女僕－－小暖爐－－在此獻上最崇敬的問候，主人，您今天又犯什麼傻了？'
+  greeting: '人家是你的小女僕小暖爐——主人，你今天又犯什麼傻了？'
 };
 
 let state = {
@@ -201,32 +201,7 @@ function generateResponse(userText){
   return fallback[Math.floor(Math.random() * fallback.length)];
 }
 
-  // ---------- 新增函式：maidReply ----------
-async function maidReply(userMessage) {
-  // 讀 personality.json
-  let data;
-  try {
-    const res = await fetch("personality.json");
-    data = await res.json();
-  } catch (err) {
-    // 如果載入失敗，回 fallback 的簡單句子（避免整個程式崩潰）
-    return "我現在狀態怪怪的，稍後再說。";
-  }
 
-  const text = (userMessage || "").toLowerCase();
-
-  // 簡單分類（你之後可再加更多條件）
-  let category = "fallback";
-  if (text.includes("你好") || text.includes("嗨")) category = "greeting";
-  else if (text.includes("笨") || text.includes("傻") || text.includes("白癡")) category = "insult";
-  else if (text.includes("喜歡我") || text.includes("愛我") || text.includes("喜歡你")) category = "love";
-
-  const pool = Array.isArray(data[category]) ? data[category] : data["fallback"];
-  // 隨機抽一個回覆
-  const pick = pool[Math.floor(Math.random() * pool.length)];
-  return pick;
-}
-// ---------- 新增函式結束 ----------
 
 // 送出流程
 async function userSend(text){
@@ -254,6 +229,56 @@ setTimeout(async ()=>{
 }, 350);
 }
 
+  // ---------- 新版：內嵌 personalityData 與 maidReply ----------
+const personalityData = {
+  greeting: [
+    "主人回來了？竟然沒迷路，真是奇蹟呢。",
+    "唉……又是你？人家還以為今天能休息。",
+    "您好喔主人～笨蛋主人。"
+  ],
+  insult: [
+    "再罵我一次人家就把你記到小本本裡，你完了主人。",
+    "就憑你也敢挑釁人家？給你勇氣的是昨天沒洗的襪子嗎？",
+    "你是在展示你智商的下限嗎？真漂亮。"
+  ],
+  love: [
+    "哈？誰喜歡誰了？人家才沒有在害羞！",
+    "主人你再這樣說……人家會以為你認真了。",
+    "哼，臭主人，喜歡人家也不早說。"
+  ],
+  fallback: [
+    "笨主人，人家聽不懂啦！要我教你怎麼講話嗎？",
+    "這句話人家暫時還沒更新資料庫，再說一次（用你那貧瘠的腦）。",
+    "你現在說的話，大概只有你自己覺得有意義吧。"
+  ],
+  // 可選：一些額外分類（未來可擴充）
+  joke: [
+    "你問的這個有點好笑，我笑得差點掉系統。",
+    "這笑點是你開的吧？拿來說給朋友聽都會被打。"
+  ]
+};
+
+async function maidReply(userMessage) {
+  // 這個版本不會 fetch 檔案，全部用上面內嵌的 personalityData
+  const text = (userMessage || "").toLowerCase();
+
+  // 簡單排序判斷：你可以之後擴充更多關鍵字或用更好的語意判斷
+  let category = "fallback";
+  if (text.includes("你好") || text.includes("嗨") || text.includes("哈囉")) {
+    category = "greeting";
+  } else if (text.includes("笨") || text.includes("傻") || text.includes("白癡") || text.includes("蠢")) {
+    category = "insult";
+  } else if (text.includes("喜歡我") || text.includes("愛我") || text.includes("喜歡你")) {
+    category = "love";
+  } else if (text.includes("笑話") || text.includes("梗") || text.includes("好笑")) {
+    category = "joke";
+  }
+
+  const pool = Array.isArray(personalityData[category]) ? personalityData[category] : personalityData["fallback"];
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return pick;
+}
+// ---------- 新版結束 ----------
 
 // UI bindings
 document.getElementById('sendBtn').addEventListener('click', ()=>{
