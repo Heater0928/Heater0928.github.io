@@ -255,6 +255,28 @@ setTimeout(async ()=>{
   for(const p of pos) if(low.includes(p)) { adjustAffection(+2); break; }
   for(const n of neg) if(low.includes(n)) { adjustAffection(-2); break; }
 
+  // 優先走記憶型回覆（例如：告訴名字）
+const memoryFacts = extractFacts(text);
+if(memoryFacts.length){
+  memoryFacts.forEach(f=>{
+    const idx = state.memory.findIndex(m => m.key === f.key);
+    if(idx >= 0) state.memory[idx].value = f.value;
+    else state.memory.push(f);
+  });
+  saveState();
+
+  const name = memoryFacts.find(f=>f.key==='name');
+  if(name){
+    state.history.push({role:'maid', text:`知道了，${name.value}。我會記住你的名字的～`});
+    render();
+    return;
+  }
+
+  state.history.push({role:'maid', text:`好的，我記下來了～`});
+  render();
+  return;
+}
+
   // 呼叫新 maidReply（她會自己選 tone）
   const resp = await maidReply(text);
 
