@@ -118,15 +118,37 @@ function renderMemory(){
   memoryView.innerHTML = html;
 }
 
-// 簡單的資訊抽取：偵測「我叫 X」「我喜歡 X」等
+// ---------- 新版 extractFacts：優先使用 memoryRules，找不到再退回原本的 regex ----------
 function extractFacts(userText){
-  const text = userText.trim();
+  const text = (userText || '').trim();
   const facts = [];
+
+  // 如果 memoryRules 已載入，使用規則抽取
+  if (typeof memoryRules === 'object' && memoryRules !== null && Array.isArray(memoryRules.patterns)) {
+    memoryRules.patterns.forEach(rule => {
+      rule.match.forEach(k => {
+        const idx = text.indexOf(k);
+        if (idx !== -1) {
+          // 取關鍵字之後的整段（簡單策略）
+          let val = text.substring(idx + k.length).trim();
+          // 去掉句尾標點
+          val = val.replace(/[。,.!?！]/g,'').trim();
+          if (val.length > 0) {
+            facts.push({ type: 'fact', key: rule.extract.field, value: val });
+          }
+        }
+      });
+    });
+    if (facts.length) return facts;
+    // 若 memoryRules 沒抽到，再走下面的舊式 regex 作為保底
+  }
+
+  // 保底：原本的正則抽取（舊版行為）
   // 我叫 X / 我是 X / 名字是 X
   const nameMatch = text.match(/我叫\s*([^\s]{1,20})|我是\s*([^\s]{1,20})|我來自\s*([^\s]{1,20})|我擁有\s*([^\s]{1,20})|名字是\s*([^\s]{1,20})/i);
   if(nameMatch){
-    const name = (nameMatch[1] || nameMatch[2] || nameMatch[3]).replace(/[。,.!?！]/g,'');
-    facts.push({type:'fact', key:'name', value:name});
+    const name = (nameMatch[1] || nameMatch[2] || nameMatch[3] || '').replace(/[。,.!?！]/g,'').trim();
+    if(name) facts.push({type:'fact', key:'name', value:name});
   }
   // 我喜歡 X / 喜歡 X
   const favMatch = text.match(/喜歡\s*(.+)$/i);
@@ -139,6 +161,7 @@ function extractFacts(userText){
   if(ageMatch){
     facts.push({type:'fact', key:'age', value: ageMatch[1]});
   }
+
   return facts;
 }
 
@@ -368,6 +391,25 @@ function chooseTone(){
   return 'A';
 }
 
+// ---------- memoryRules 載入（非阻塞） ----------
+let memoryRules = null;
+async function loadMemoryRules(){
+  try{
+    const res = await fetch('memory-rules.json');
+    if(res.ok) {
+      memoryRules = await res.json();
+      console.log('memoryRules loaded:', memoryRules);
+    } else {
+      console.warn('memory-rules.json not found (status ' + res.status + ')');
+    }
+  }catch(err){
+    console.warn('loadMemoryRules failed', err);
+  }
+}
+// 立即啟動載入（非阻塞）
+loadMemoryRules();
+// ---------- memoryRules 載入結束 ----------
+  
 // 更新版 maidReply：會依據 chooseTone() 來抓對應的 pool 並回覆
 async function maidReply(userMessage) {
   const text = (userMessage || '').toLowerCase();
