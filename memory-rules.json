@@ -1,22 +1,30 @@
 {
   "patterns": [
     {
-      "match": ["我叫", "我的名字"],
-      "extract": {"field": "name_user", "position": "after"}
+      "match": ["我叫", "我的名字", "我是"],
+      "extract": {"field": "name", "position": "after"}
     },
     {
-      "match": ["我喜歡", "最愛"],
-      "extract": {"field": "like_thing", "position": "after"}
+      "match": ["我喜歡", "最愛", "我愛"],
+      "extract": {"field": "preference", "position": "after"}
+    },
+    {
+      "match": ["我來自", "我在", "我住在"],
+      "extract": {"field": "location", "position": "after"}
     }
   ],
   "responses": {
-    "name_user": [
+    "name": [
       "好啦，%value%，人家記住你的名字了。",
-      "知道了啦，主人叫%value%。別一直炫耀～"
+      "知道了，主人叫%value%。別太得意喔。"
     ],
-    "like_thing": [
-      "原來主人喜歡%value%？人家會記住的……可能啦。",
-      "欸？%value%？主人品味有夠微妙欸。"
+    "preference": [
+      "原來主人喜歡%value%？有趣。",
+      "%value%？人家會偷偷記下來的（別想跑）。"
+    ],
+    "location": [
+      "來自 %value%？那裡不錯（也許會去）。",
+      "住在 %value%？嗯，記住了。別想搬家躲我。"
     ]
   }
 }
