@@ -61,6 +61,18 @@
 
 const STORAGE_KEY = 'maid_chat_v1';
 
+  let memoryRules = null;
+
+async function loadMemoryRules(){
+  try {
+    const res = await fetch('memory-rules.json');
+    memoryRules = await res.json();
+    console.log('memory rules loaded:', memoryRules);
+  } catch(err){
+    console.error('Failed to load memory rules:', err);
+  }
+}
+
 // 初始角色（你之後可以改）
 const defaultPersona = {
   name: '小暖爐',
@@ -277,8 +289,34 @@ if(memoryFacts.length){
   return;
 }
 
-  // 呼叫新 maidReply（她會自己選 tone）
-  const resp = await maidReply(text);
+let respCandidate = null;
+
+// memory-rules.json 啟動
+if(memoryRules && memoryRules.patterns){
+  for(const rule of memoryRules.patterns){
+    for(const p of rule.match){
+      if(text.includes(p)){
+        // 擷取文字
+        const extracted = text.split(p)[1]?.trim();
+        if(extracted){
+          // 存記憶
+          state.memory.push({type:'fact', key: rule.extract.field, value: extracted});
+          saveState();
+
+          // 套用 responses
+          const responses = memoryRules.responses[rule.extract.field];
+          if(responses){
+            const reply =
+              responses[Math.floor(Math.random()*responses.length)]
+              .replace('%value%', extracted);
+            respCandidate = reply;
+          }
+        }
+      }
+    }
+  }
+}
+let resp = respCandidate || await maidReply(text);
 
   // 如果使用者在問名字或查記憶，我們想優先用 generateResponse 的記憶機制回覆
   // （例如問「你叫什麼」或「你記得我嗎」），優先檢查並回覆
