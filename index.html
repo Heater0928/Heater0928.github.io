@@ -59,20 +59,6 @@
   - 回答以超簡易規則+記憶檢索實作（示範核心概念）
 */
 
-const STORAGE_KEY = 'maid_chat_v1';
-
-  let memoryRules = null;
-
-async function loadMemoryRules(){
-  try {
-    const res = await fetch('memory-rules.json');
-    memoryRules = await res.json();
-    console.log('memory rules loaded:', memoryRules);
-  } catch(err){
-    console.error('Failed to load memory rules:', err);
-  }
-}
-
 // 初始角色（你之後可以改）
 const defaultPersona = {
   name: '小暖爐',
@@ -594,12 +580,14 @@ document.getElementById('fileInput').addEventListener('change', (ev)=>{
 
 // 初始化
 loadState();
-  await loadMemoryRules();
-if(state.history.length === 0){
-  state.history.push({role:'maid', text: state.persona.greeting});
-  saveState();
-}
-render();
+loadMemoryRules().then(() => {
+  if(state.history.length === 0){
+    state.history.push({role:'maid', text: state.persona.greeting});
+    saveState();
+  }
+  render();
+});
+
 </script>
 </body>
 </html>
