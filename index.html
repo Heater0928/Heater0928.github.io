@@ -417,7 +417,7 @@ function chooseTone(){
 let memoryRules = null;
 async function loadMemoryRules(){
   try{
-    const res = await fetch('memory-rules.json');
+    const res = await fetch('https://raw.githubusercontent.com/Heater0928/Heater0928.github.io/main/memory-rules.json');
     if(res.ok) {
       memoryRules = await res.json();
       console.log('memoryRules loaded:', memoryRules);
