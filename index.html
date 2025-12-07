@@ -594,6 +594,7 @@ document.getElementById('fileInput').addEventListener('change', (ev)=>{
 
 // 初始化
 loadState();
+  await loadMemoryRules();
 if(state.history.length === 0){
   state.history.push({role:'maid', text: state.persona.greeting});
   saveState();
