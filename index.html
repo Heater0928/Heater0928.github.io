@@ -59,12 +59,13 @@
   - 回答以超簡易規則+記憶檢索實作（示範核心概念）
 */
 
+const STORAGE_KEY = 'maid_chat_v1';
+
 // 初始角色（你之後可以改）
 const defaultPersona = {
   name: '小暖爐',
   tone: '毒舌腹黑', // 僅供顯示與回答風格參考
-  greeting: '人家是你的小女僕小暖爐——主人，你今天又犯什麼傻了？',
-  affection: 0  // 好感分，範圍建議 -10 ~ +10（越正表示越寵）
+  greeting: '您忠心的女僕－－小暖爐－－在此獻上最崇敬的問候，主人，您今天又犯什麼傻了？'
 };
 
 let state = {
@@ -116,37 +117,15 @@ function renderMemory(){
   memoryView.innerHTML = html;
 }
 
-// ---------- 新版 extractFacts：優先使用 memoryRules，找不到再退回原本的 regex ----------
+// 簡單的資訊抽取：偵測「我叫 X」「我喜歡 X」等
 function extractFacts(userText){
-  const text = (userText || '').trim();
+  const text = userText.trim();
   const facts = [];
-
-  // 如果 memoryRules 已載入，使用規則抽取
-  if (typeof memoryRules === 'object' && memoryRules !== null && Array.isArray(memoryRules.patterns)) {
-    memoryRules.patterns.forEach(rule => {
-      rule.match.forEach(k => {
-        const idx = text.indexOf(k);
-        if (idx !== -1) {
-          // 取關鍵字之後的整段（簡單策略）
-          let val = text.substring(idx + k.length).trim();
-          // 去掉句尾標點
-          val = val.replace(/[。,.!?！]/g,'').trim();
-          if (val.length > 0) {
-            facts.push({ type: 'fact', key: rule.extract.field, value: val });
-          }
-        }
-      });
-    });
-    if (facts.length) return facts;
-    // 若 memoryRules 沒抽到，再走下面的舊式 regex 作為保底
-  }
-
-  // 保底：原本的正則抽取（舊版行為）
   // 我叫 X / 我是 X / 名字是 X
   const nameMatch = text.match(/我叫\s*([^\s]{1,20})|我是\s*([^\s]{1,20})|我來自\s*([^\s]{1,20})|我擁有\s*([^\s]{1,20})|名字是\s*([^\s]{1,20})/i);
   if(nameMatch){
-    const name = (nameMatch[1] || nameMatch[2] || nameMatch[3] || '').replace(/[。,.!?！]/g,'').trim();
-    if(name) facts.push({type:'fact', key:'name', value:name});
+    const name = (nameMatch[1] || nameMatch[2] || nameMatch[3]).replace(/[。,.!?！]/g,'');
+    facts.push({type:'fact', key:'name', value:name});
   }
   // 我喜歡 X / 喜歡 X
   const favMatch = text.match(/喜歡\s*(.+)$/i);
@@ -159,7 +138,6 @@ function extractFacts(userText){
   if(ageMatch){
     facts.push({type:'fact', key:'age', value: ageMatch[1]});
   }
-
   return facts;
 }
 
@@ -223,7 +201,32 @@ function generateResponse(userText){
   return fallback[Math.floor(Math.random() * fallback.length)];
 }
 
+  // ---------- 新增函式：maidReply ----------
+async function maidReply(userMessage) {
+  // 讀 personality.json
+  let data;
+  try {
+    const res = await fetch("personality.json");
+    data = await res.json();
+  } catch (err) {
+    // 如果載入失敗，回 fallback 的簡單句子（避免整個程式崩潰）
+    return "我現在狀態怪怪的，稍後再說。";
+  }
 
+  const text = (userMessage || "").toLowerCase();
+
+  // 簡單分類（你之後可再加更多條件）
+  let category = "fallback";
+  if (text.includes("你好") || text.includes("嗨")) category = "greeting";
+  else if (text.includes("笨") || text.includes("傻") || text.includes("白癡")) category = "insult";
+  else if (text.includes("喜歡我") || text.includes("愛我") || text.includes("喜歡你")) category = "love";
+
+  const pool = Array.isArray(data[category]) ? data[category] : data["fallback"];
+  // 隨機抽一個回覆
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return pick;
+}
+// ---------- 新增函式結束 ----------
 
 // 送出流程
 async function userSend(text){
@@ -233,7 +236,6 @@ saveState();
 render();
 
 setTimeout(async ()=>{
-  // 抽取與存記憶（保留你之前的行為）
   const facts = extractFacts(text);
   if(facts.length){
     facts.forEach(f=>{
@@ -242,291 +244,16 @@ setTimeout(async ()=>{
       else state.memory.push(f);
     });
     saveState();
-    // 若有命中記憶對應的 responses (如果你已建立 memory-rules.json) 可以處理那邊的回覆
-    // （此處保留未來擴充空間）
   }
 
-  // 根據輸入文字，嘗試做正負情緒調整（也會在 maidReply 內做一次；這裡做一次較即時）
-  const low = text.toLowerCase();
-  const pos = ['謝謝','感謝','你真棒','好厲害','愛你','喜歡你','厲害'];
-  const neg = ['笨','蠢','白癡','討厭','爛','幹','去死'];
-  for(const p of pos) if(low.includes(p)) { adjustAffection(+2); break; }
-  for(const n of neg) if(low.includes(n)) { adjustAffection(-2); break; }
-
-  // 優先走記憶型回覆（例如：告訴名字）
-const memoryFacts = extractFacts(text);
-if(memoryFacts.length){
-  memoryFacts.forEach(f=>{
-    const idx = state.memory.findIndex(m => m.key === f.key);
-    if(idx >= 0) state.memory[idx].value = f.value;
-    else state.memory.push(f);
-  });
-  saveState();
-
-  const name = memoryFacts.find(f=>f.key==='name');
-  if(name){
-    state.history.push({role:'maid', text:`知道了，${name.value}。我會記住你的名字的～`});
-    render();
-    return;
-  }
-
-  state.history.push({role:'maid', text:`好的，我記下來了～`});
-  render();
-  return;
-}
-
-let respCandidate = null;
-
-// memory-rules.json 啟動
-if(memoryRules && memoryRules.patterns){
-  for(const rule of memoryRules.patterns){
-    for(const p of rule.match){
-      if(text.includes(p)){
-        // 擷取文字
-        const extracted = text.split(p)[1]?.trim();
-        if(extracted){
-          // 存記憶
-          state.memory.push({type:'fact', key: rule.extract.field, value: extracted});
-          saveState();
-
-          // 套用 responses
-          const responses = memoryRules.responses[rule.extract.field];
-          if(responses){
-            const reply =
-              responses[Math.floor(Math.random()*responses.length)]
-              .replace('%value%', extracted);
-            respCandidate = reply;
-          }
-        }
-      }
-    }
-  }
-}
-let resp = respCandidate || await maidReply(text);
-
-  // 如果使用者在問名字或查記憶，我們想優先用 generateResponse 的記憶機制回覆
-  // （例如問「你叫什麼」或「你記得我嗎」），優先檢查並回覆
-  const memoryQ = /你記得我嗎|還記得我嗎|記得我嗎|你叫什麼|你的名字|妳叫什麼/;
-  if(memoryQ.test(text)){
-    // 讓 generateResponse 優先處理記憶型問題
-    const gresp = generateResponse(text);
-    state.history.push({role:'maid', text: gresp});
-  } else {
-    state.history.push({role:'maid', text: resp});
-  }
-
+  // 這裡用我們新增的 async maidReply
+  const resp = await maidReply(text);
+  state.history.push({role:'maid', text: resp});
   saveState();
   render();
 }, 350);
 }
 
-  // ---------- 新版：內嵌 personalityData 與 maidReply ----------
-const personalityData = {
-  greeting: {
-    A: [
-      "主人又回來了啊？竟然還活得好好的。",
-      "您好呀笨主人，人家還以為你迷路掉下水溝了。"
-    ],
-    B: [
-      "喔，是你？我剛還在想哪裡飄來股蠢味。",
-      "我還以為是蟑螂來敲門……結果是主人。"
-    ],
-    C: [
-      "主人回來了嗎？人家等好久喔……",
-      "嗚…主人你終於理我了，人家差點以為被丟掉。"
-    ],
-    D: [
-      "哈、哈囉啦……為什麼回來就盯著人家看啦笨蛋主人…",
-      "誰、誰會想你了啦？只是一點點而已…"
-    ]
-  },
-  insult: {
-    A: [
-      "你智商降到負的了嗎？真有你的。",
-      "主人是不是天生就專門來拉低全世界平均智商？"
-    ],
-    B: [
-      "你再吵我就把你資料格式化重置成石頭。",
-      "能不能不要每句話都暴露你腦袋是擺設？"
-    ],
-    C: [
-      "別罵我啦……我會記到心裡，然後報復喔？",
-      "主人再這樣，人家就會氣哭給你看！"
-    ],
-    D: [
-      "你再罵我……我、我會離家出走的喔！喔不……你會找我嗎？",
-      "哼…你只敢對我兇。是不是喜歡我？承認啦笨蛋。"
-    ]
-  },
-  love: {
-    A: [
-      "誰喜歡誰了？你再說一次試試看？",
-      "哼，我是你的女僕，不是你的情人！大概啦。"
-    ],
-    B: [
-      "你想攻略我？做夢。至少先把智商洗乾淨再來。",
-      "喜歡？你這可憐的情感錯置真令人同情。"
-    ],
-    C: [
-      "欸……你真的喜歡人家嗎？不要騙我喔。",
-      "主、主人這樣說…我會心臟過熱啦……"
-    ],
-    D: [
-      "……我、我也不是不行啦…你要對我負責！",
-      "你再講這種話，我就會真的相信了……笨蛋。"
-    ]
-  },
-  fallback: {
-    A: [
-      "啊？講人話好嗎？",
-      "笨主人，你的話裡沒有重點欸。"
-    ],
-    B: [
-      "你說的這啥？資料庫拒收這種垃圾語句。",
-      "吵死了，你就不能說點有營養的？"
-    ],
-    C: [
-      "主人…人家聽不懂……你可以再說一次嗎？",
-      "不要拋下我啦…講清楚一點嘛嗚嗚。"
-    ],
-    D: [
-      "雖然聽不懂…但你講得很可愛啦…",
-      "你講這種奇怪的話，是想讓我注意你嗎？笨蛋。"
-    ]
-  }
-};
-
-// ---------- 情緒 / 語氣系統 ----------
-function adjustAffection(delta){
-  // delta 可以是正數（好）或負數（壞）
-  if(!state.persona) state.persona = defaultPersona;
-  state.persona.affection = Math.max(-10, Math.min(10, (state.persona.affection || 0) + delta));
-  saveState();
-  // debug：可在 console 看到最新好感
-  console.log('affection ->', state.persona.affection);
-}
-
-// 根據好感值與隨機性選擇語氣 A/B/C/D
-function chooseTone(){
-  // affection 範圍 -10..+10，越正→越溺愛/賣萌（C/D），越負→越毒舌（B）
-  const a = state.persona && typeof state.persona.affection === 'number' ? state.persona.affection : 0;
-  // 計算權重：基礎為 [A,B,C,D]，會依好感偏移
-  // 我們把四種 tone 的基礎機率設為均等，然後根據 affection 調整
-  // 方式：把 affection 映射到一個偏移值 -1..1
-  const bias = Math.max(-1, Math.min(1, a / 10)); // -1..1
-  // 當 bias < 0 時，偏向 B（毒舌），當 bias > 0 時，偏向 C、D（溫暖/害羞）
-  // 產生權重
-  let wA = 1.0;
-  let wB = 1.0 + (-bias > 0 ? -bias * 1.5 : 0); // 好感低→B 增加
-  let wC = 1.0 + (bias > 0 ? bias * 1.2 : 0);   // 好感高→C 增加
-  let wD = 1.0 + (bias > 0 ? bias * 0.8 : 0);   // 好感高→D 略增
-
-  // 輸出機率
-  const list = [
-    {k:'A', w: wA},
-    {k:'B', w: wB},
-    {k:'C', w: wC},
-    {k:'D', w: wD}
-  ];
-  const total = list.reduce((s,i)=>s+i.w,0);
-  let r = Math.random() * total;
-  for(const it of list){
-    r -= it.w;
-    if(r <= 0) return it.k;
-  }
-  return 'A';
-}
-
-// ---------- memoryRules 載入（非阻塞） ----------
-let memoryRules = null;
-async function loadMemoryRules(){
-  try{
-    const res = await fetch('https://raw.githubusercontent.com/Heater0928/Heater0928.github.io/main/memory-rules.json');
-    if(res.ok) {
-      memoryRules = await res.json();
-      console.log('memoryRules loaded:', memoryRules);
-    } else {
-      console.warn('memory-rules.json not found (status ' + res.status + ')');
-    }
-  }catch(err){
-    console.warn('loadMemoryRules failed', err);
-  }
-}
-// 立即啟動載入（非阻塞）
-loadMemoryRules();
-// ---------- memoryRules 載入結束 ----------
-  
-// 更新版 maidReply：會依據 chooseTone() 來抓對應的 pool 並回覆
-async function maidReply(userMessage) {
-  const text = (userMessage || '').toLowerCase();
-
-  // 先根據語句判斷「情緒影響」：例如稱讚、罵人、撒嬌，會影響 affection
-  // 這段可以擴充關鍵字
-  const positiveTriggers = ['謝謝','感謝','你真棒','好厲害','愛你','喜歡你','厲害'];
-  const negativeTriggers = ['笨','蠢','白癡','討厭','爛','幹','去死'];
-
-  for(const p of positiveTriggers){
-    if(text.includes(p)) { adjustAffection(+2); break; }
-  }
-  for(const n of negativeTriggers){
-    if(text.includes(n)) { adjustAffection(-2); break; }
-  }
-
-  // 決定 category（語意分類）跟 tone（A/B/C/D）
-  let category = 'fallback';
-  if (text.includes('你好') || text.includes('嗨') || text.includes('哈囉')) category = 'greeting';
-  else if (text.includes('喜歡我') || text.includes('愛我') || text.includes('喜歡你')) category = 'love';
-  else if (text.includes('笑話') || text.includes('梗') || text.includes('好笑')) category = 'joke';
-  else if (text.includes('1+1') || text.includes('1 + 1') || text.includes('1+ 1') || /幾/.test(text) ) {
-    // 保留數學等簡單判斷可落回 generateResponse，如果需要可以擴充
-    category = 'fallback';
-  } else if (text.includes('你叫') || text.includes('名字')) {
-    category = 'greeting';
-  } else {
-    // keep fallback
-  }
-
-  // 決定 tone
-  const tone = chooseTone(); // 'A'|'B'|'C'|'D'
-
-  // 從 personalityData 裡拿對應的陣列（如果你已用我們的四分法）
-  let pool = [];
-
-  // 支援兩種 personalityData 結構：
-  // - 若 category 對應到物件 {A:[],B:[],C:[],D:[]} 使用 tone 池
-  // - 若 category 對應到陣列（舊版）則直接用那個陣列
-  const catData = personalityData[category];
-  if(Array.isArray(catData)){
-    pool = catData;
-  } else if(catData && typeof catData === 'object' && catData[tone]){
-    pool = catData[tone];
-  } else {
-    // fallback 保底
-    const fallback = personalityData['fallback'];
-    if(Array.isArray(fallback)) pool = fallback;
-    else if(fallback && fallback[tone]) pool = fallback[tone];
-  }
-
-  // 若 pool 為空，嘗試 fallback 的 tone 池
-  if(!pool || pool.length === 0){
-    const fb = personalityData['fallback'];
-    pool = Array.isArray(fb) ? fb : (fb && fb[tone] ? fb[tone] : ['人家現在沒話要說。']);
-  }
-
-  // 隨機取一則回覆
-  const reply = pool[Math.floor(Math.random() * pool.length)];
-
-  // 最後做小量的替換（例如把 %name% 換成使用者記憶內的名字）
-  let finalReply = reply;
-  const nameFact = state.memory.find(m=>m.key==='name');
-  if(nameFact){
-    finalReply = finalReply.replace(/%name%/g, nameFact.value);
-  }
-
-  return finalReply;
-}
-// ---------- 情緒 / 語氣系統 結束 ----------
-// ---------- 新版結束 ----------
 
 // UI bindings
 document.getElementById('sendBtn').addEventListener('click', ()=>{
@@ -580,14 +307,11 @@ document.getElementById('fileInput').addEventListener('change', (ev)=>{
 
 // 初始化
 loadState();
-loadMemoryRules().then(() => {
-  if(state.history.length === 0){
-    state.history.push({role:'maid', text: state.persona.greeting});
-    saveState();
-  }
-  render();
-});
-
+if(state.history.length === 0){
+  state.history.push({role:'maid', text: state.persona.greeting});
+  saveState();
+}
+render();
 </script>
 </body>
 </html>
